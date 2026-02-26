@@ -1,304 +1,350 @@
 "use client";
 import { useState } from "react";
-import { products, formatPrice } from "@/lib/data";
+import Link from "next/link";
+import Image from "next/image";
+import { useCart } from "@/context/CartContext";
+import { products, formatPrice, Product } from "@/lib/data";
+
+function QuickAddButton({ product }: { product: Product }) {
+  const { addItem } = useCart();
+  const [added, setAdded] = useState(false);
+  const handle = () => { addItem(product, 1); setAdded(true); setTimeout(() => setAdded(false), 1200); };
+  return (
+    <button onClick={handle}
+      className={`text-xs px-2.5 py-1 rounded-lg transition-colors flex-shrink-0 ${added ? "bg-green-500 text-white" : "text-accent border border-accent/30 hover:bg-accent hover:text-white"}`}>
+      {added ? "✓" : "+ Tambah"}
+    </button>
+  );
+}
 
 interface FormData {
   name: string;
   phone: string;
   address: string;
-  package: string;
-  quantity: string;
   deliveryDate: string;
   notes: string;
 }
 
 export default function OrderPage() {
-  const [form, setForm] = useState<FormData>({
-    name: "",
-    phone: "",
-    address: "",
-    package: "",
-    quantity: "1",
-    deliveryDate: "",
-    notes: "",
-  });
-  const [submitted, setSubmitted] = useState(false);
+  const { items, updateQty, removeItem, clearCart, totalItems, totalPrice } = useCart();
+  const [form, setForm] = useState<FormData>({ name: "", phone: "", address: "", deliveryDate: "", notes: "" });
+  const [step, setStep] = useState<"cart" | "form" | "done">("cart");
 
-  const selectedProduct = products.find((p) => p.name === form.package);
-  const totalPrice = selectedProduct ? selectedProduct.price * parseInt(form.quantity || "1") : 0;
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
   };
 
   const buildWAMessage = () => {
+    const itemLines = items.map((i) => `  • ${i.product.name} x${i.qty} = ${formatPrice(i.product.price * i.qty)}`).join("\n");
     const lines = [
       "🎁 *PEMESANAN PARCEL LEBARAN*",
       "━━━━━━━━━━━━━━━━━━",
       `👤 *Nama:* ${form.name}`,
       `📱 *No. HP:* ${form.phone}`,
       `📍 *Alamat:* ${form.address}`,
-      `📦 *Paket:* ${form.package}`,
-      `🔢 *Jumlah:* ${form.quantity} pcs`,
       `📅 *Tgl Kirim:* ${form.deliveryDate || "Sesuai kesepakatan"}`,
-      selectedProduct ? `💰 *Total:* ${formatPrice(totalPrice)}` : "",
+      "",
+      "📦 *Pesanan:*",
+      itemLines,
+      "",
+      `💰 *Total: ${formatPrice(totalPrice)}*`,
       form.notes ? `📝 *Catatan:* ${form.notes}` : "",
       "━━━━━━━━━━━━━━━━━━",
       "Mohon konfirmasi ketersediaan dan detail pembayaran. Terima kasih! 🙏",
-    ].filter(Boolean).join("\n");
+    ].filter((l) => l !== undefined).join("\n");
     return encodeURIComponent(lines);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.phone || !form.package) return;
-    setSubmitted(true);
+    setStep("done");
   };
 
-  const isValid = form.name && form.phone && form.package && form.address;
+  const handleReset = () => {
+    setStep("cart");
+    setForm({ name: "", phone: "", address: "", deliveryDate: "", notes: "" });
+    // Keranjang TIDAK dihapus — user bisa langsung pesan lagi atau tambah item
+  };
+
+  const isFormValid = form.name && form.phone && form.address;
 
   return (
     <div className="min-h-screen bg-neutral-50 pt-16">
       {/* Header */}
       <div className="bg-white border-b border-neutral-100">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12 text-center">
-          <p className="text-accent text-sm font-semibold uppercase tracking-widest mb-2">Mudah & Cepat</p>
-          <h1 className="font-display text-3xl md:text-4xl font-semibold text-neutral-900 mb-3">
-            Form Pemesanan
-          </h1>
-          <p className="section-subtitle max-w-lg mx-auto">
-            Isi form di bawah, lalu klik tombol untuk langsung kirim ke WhatsApp kami.
-          </p>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="font-display text-2xl md:text-3xl font-semibold text-neutral-900">Keranjang Pesanan</h1>
+              <p className="text-neutral-500 text-sm mt-1">{totalItems > 0 ? `${totalItems} item dipilih` : "Belum ada item dipilih"}</p>
+            </div>
+            {/* Step Indicator */}
+            <div className="hidden sm:flex items-center gap-2 text-sm">
+              {(["cart", "form", "done"] as const).map((s, i) => (
+                <div key={s} className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                    step === s ? "bg-accent text-white" : 
+                    (step === "form" && s === "cart") || step === "done" ? "bg-green-500 text-white" : "bg-neutral-200 text-neutral-500"
+                  }`}>
+                    {(step === "form" && s === "cart") || step === "done" && s !== "done" ? "✓" : i + 1}
+                  </div>
+                  <span className={step === s ? "text-accent font-medium" : "text-neutral-400"}>
+                    {s === "cart" ? "Keranjang" : s === "form" ? "Data Diri" : "Selesai"}
+                  </span>
+                  {i < 2 && <span className="text-neutral-300 mx-1">›</span>}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-        {submitted ? (
-          /* Success State */
-          <div className="text-center py-16 bg-white rounded-2xl border border-neutral-100 shadow-sm">
-            <div className="text-5xl mb-4">🎉</div>
-            <h2 className="font-display text-2xl font-semibold text-neutral-900 mb-2">Pesanan Siap Dikirim!</h2>
-            <p className="text-neutral-500 mb-6 max-w-sm mx-auto">
-              Klik tombol di bawah untuk mengirim detail pesanan ke WhatsApp kami. Tim kami akan segera membalas!
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+
+        {/* STEP 1: CART */}
+        {step === "cart" && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Cart Items */}
+            <div className="lg:col-span-2 space-y-4">
+              {items.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-neutral-100 p-12 text-center">
+                  <div className="text-5xl mb-4">🛒</div>
+                  <h3 className="font-display text-xl font-semibold text-neutral-900 mb-2">Keranjang Kosong</h3>
+                  <p className="text-neutral-500 text-sm mb-6">Tambahkan paket dari katalog untuk mulai memesan</p>
+                  <Link href="/catalog" className="btn-primary">Lihat Katalog →</Link>
+                </div>
+              ) : (
+                <>
+                  {items.map((item) => (
+                    <div key={item.product.id} className="bg-white rounded-2xl border border-neutral-100 p-4 flex gap-4 hover:shadow-sm transition-shadow">
+                      {/* Image */}
+                      <div className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-primary-50">
+                        <Image
+                          src={`/images/paket-${item.product.id}.jpg`}
+                          alt={item.product.name}
+                          fill
+                          className="object-cover"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center text-2xl">
+                          {item.product.emoji}
+                        </div>
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <h4 className="font-semibold text-neutral-900">{item.product.name}</h4>
+                            <p className="text-xs text-neutral-400 mt-0.5">{item.product.items.length} item · {item.product.category}</p>
+                            <p className="text-accent font-semibold text-sm mt-1">{formatPrice(item.product.price)} / pcs</p>
+                          </div>
+                          <button
+                            onClick={() => removeItem(item.product.id)}
+                            className="text-neutral-300 hover:text-red-400 transition-colors p-1 flex-shrink-0"
+                            aria-label="Hapus"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        {/* Qty Control */}
+                        <div className="flex items-center justify-between mt-3">
+                          <div className="flex items-center gap-0 border border-neutral-200 rounded-xl overflow-hidden">
+                            <button
+                              onClick={() => updateQty(item.product.id, item.qty - 1)}
+                              className="w-8 h-8 flex items-center justify-center hover:bg-neutral-100 transition-colors text-neutral-600 font-bold"
+                            >−</button>
+                            <span className="w-10 text-center text-sm font-semibold">{item.qty}</span>
+                            <button
+                              onClick={() => updateQty(item.product.id, item.qty + 1)}
+                              className="w-8 h-8 flex items-center justify-center hover:bg-neutral-100 transition-colors text-neutral-600 font-bold"
+                            >+</button>
+                          </div>
+                          <span className="font-semibold text-neutral-900">{formatPrice(item.product.price * item.qty)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Add more */}
+                  <Link
+                    href="/catalog"
+                    className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-neutral-200 rounded-2xl text-sm text-neutral-400 hover:border-accent hover:text-accent transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Tambah Paket Lain
+                  </Link>
+                </>
+              )}
+            </div>
+
+            {/* Order Summary */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-2xl border border-neutral-100 p-5 sticky top-20">
+                <h3 className="font-semibold text-neutral-900 mb-4">Ringkasan</h3>
+                {items.length > 0 ? (
+                  <>
+                    <div className="space-y-2 mb-4">
+                      {items.map((i) => (
+                        <div key={i.product.id} className="flex justify-between text-sm">
+                          <span className="text-neutral-500">{i.product.name} ×{i.qty}</span>
+                          <span className="text-neutral-700 font-medium">{formatPrice(i.product.price * i.qty)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="border-t border-neutral-100 pt-3 flex justify-between items-center mb-4">
+                      <span className="font-semibold">Total</span>
+                      <span className="font-display font-semibold text-accent text-xl">{formatPrice(totalPrice)}</span>
+                    </div>
+                    <button
+                      onClick={() => setStep("form")}
+                      className="w-full btn-primary justify-center py-3"
+                    >
+                      Lanjut Isi Data →
+                    </button>
+                    <button
+                      onClick={() => clearCart()}
+                      className="w-full mt-2 text-xs text-neutral-400 hover:text-red-400 transition-colors py-2"
+                    >
+                      Kosongkan Keranjang
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-sm text-neutral-400 text-center py-4">Keranjang masih kosong</p>
+                )}
+              </div>
+
+              {/* Quick Add Suggestions */}
+              {items.length > 0 && (
+                <div className="mt-4 bg-white rounded-2xl border border-neutral-100 p-4">
+                  <p className="text-xs font-semibold text-neutral-500 mb-3">Paket Lainnya</p>
+                  <div className="space-y-2">
+                    {products.filter((p) => !items.find((i) => i.product.id === p.id)).slice(0, 3).map((p) => (
+                      <div key={p.id} className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-neutral-700 truncate">{p.emoji} {p.name}</p>
+                          <p className="text-xs text-accent">{formatPrice(p.price)}</p>
+                        </div>
+                        <QuickAddButton product={p} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: FORM */}
+        {step === "form" && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-neutral-100 flex items-center gap-3">
+                  <button onClick={() => setStep("cart")} className="text-neutral-400 hover:text-neutral-600 transition-colors">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <h2 className="font-semibold text-neutral-900">Data Pemesan</h2>
+                </div>
+                <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 mb-1.5">Nama Lengkap <span className="text-red-400">*</span></label>
+                      <input type="text" name="name" value={form.name} onChange={handleChange} placeholder="Nama lengkap" required
+                        className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 mb-1.5">No. HP / WhatsApp <span className="text-red-400">*</span></label>
+                      <input type="tel" name="phone" value={form.phone} onChange={handleChange} placeholder="08xxxxxxxxxx" required
+                        className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1.5">Alamat Pengiriman <span className="text-red-400">*</span></label>
+                    <textarea name="address" value={form.address} onChange={handleChange} placeholder="Alamat lengkap pengiriman" required rows={3}
+                      className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 resize-none" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1.5">Tanggal Pengiriman</label>
+                    <input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleChange}
+                      className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1.5">Catatan Tambahan</label>
+                    <textarea name="notes" value={form.notes} onChange={handleChange} placeholder="Pesan khusus, ucapan kartu, dll." rows={2}
+                      className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 resize-none" />
+                  </div>
+                  <button type="submit" disabled={!isFormValid}
+                    className="w-full btn-primary justify-center py-3.5 text-base disabled:opacity-50 disabled:cursor-not-allowed">
+                    Lanjut ke WhatsApp →
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Summary Sidebar */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-2xl border border-neutral-100 p-5 sticky top-20">
+                <h3 className="font-semibold text-neutral-900 mb-4">Pesanan Kamu</h3>
+                <div className="space-y-3 mb-4">
+                  {items.map((i) => (
+                    <div key={i.product.id} className="flex items-center gap-3">
+                      <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-primary-50 flex-shrink-0">
+                        <Image src={`/images/paket-${i.product.id}.jpg`} alt={i.product.name} fill className="object-cover"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                        <div className="absolute inset-0 flex items-center justify-center text-lg">{i.product.emoji}</div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-neutral-800 truncate">{i.product.name} ×{i.qty}</p>
+                        <p className="text-xs text-accent">{formatPrice(i.product.price * i.qty)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-neutral-100 pt-3 flex justify-between items-center">
+                  <span className="font-semibold text-sm">Total</span>
+                  <span className="font-display font-semibold text-accent text-lg">{formatPrice(totalPrice)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: DONE */}
+        {step === "done" && (
+          <div className="max-w-lg mx-auto text-center py-8">
+            <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-10">
+              <div className="text-5xl mb-4">🎉</div>
+              <h2 className="font-display text-2xl font-semibold text-neutral-900 mb-2">Pesanan Siap!</h2>
+              <p className="text-neutral-500 mb-2">Klik tombol di bawah untuk kirim detail pesanan ke WhatsApp kami.</p>
+              <div className="bg-neutral-50 rounded-xl p-3 mb-6 text-left">
+                <p className="text-xs text-neutral-500 font-medium mb-2">Ringkasan ({items.length} paket):</p>
+                {items.map((i) => (
+                  <p key={i.product.id} className="text-xs text-neutral-600">• {i.product.name} ×{i.qty} — {formatPrice(i.product.price * i.qty)}</p>
+                ))}
+                <p className="text-xs font-semibold text-accent mt-2 pt-2 border-t border-neutral-200">Total: {formatPrice(totalPrice)}</p>
+              </div>
               <a
                 href={`https://wa.me/6208551234202?text=${buildWAMessage()}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-8 py-4 rounded-2xl transition-colors text-base"
+                className="w-full inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-8 py-4 rounded-2xl transition-colors text-base mb-3"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
                 </svg>
                 Kirim ke WhatsApp
               </a>
-              <button
-                onClick={() => { setSubmitted(false); setForm({ name: "", phone: "", address: "", package: "", quantity: "1", deliveryDate: "", notes: "" }); }}
-                className="btn-outline"
-              >
-                Pesan Lagi
+              <button onClick={handleReset} className="w-full btn-outline justify-center py-3 text-sm">
+                ← Kembali / Pesan Lagi
               </button>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Form */}
-            <div className="lg:col-span-2">
-              <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-neutral-100">
-                  <h2 className="font-semibold text-neutral-900">Data Pemesan</h2>
-                </div>
-                <div className="p-6 space-y-5">
-                  {/* Name */}
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-1.5">
-                      Nama Lengkap <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={form.name}
-                      onChange={handleChange}
-                      placeholder="Masukkan nama lengkap"
-                      required
-                      className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-colors"
-                    />
-                  </div>
-
-                  {/* Phone */}
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-1.5">
-                      Nomor HP / WhatsApp <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={form.phone}
-                      onChange={handleChange}
-                      placeholder="Contoh: 08123456789"
-                      required
-                      className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-colors"
-                    />
-                  </div>
-
-                  {/* Address */}
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-1.5">
-                      Alamat Pengiriman <span className="text-red-400">*</span>
-                    </label>
-                    <textarea
-                      name="address"
-                      value={form.address}
-                      onChange={handleChange}
-                      placeholder="Masukkan alamat lengkap pengiriman"
-                      required
-                      rows={3}
-                      className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-colors resize-none"
-                    />
-                  </div>
-
-                  {/* Package Select */}
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-1.5">
-                      Pilih Paket <span className="text-red-400">*</span>
-                    </label>
-                    <select
-                      name="package"
-                      value={form.package}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-colors bg-white"
-                    >
-                      <option value="">-- Pilih paket --</option>
-                      <optgroup label="Standar">
-                        {products.filter((p) => p.category === "standard").map((p) => (
-                          <option key={p.id} value={p.name}>
-                            {p.emoji} {p.name} — {formatPrice(p.price)}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Premium 👑">
-                        {products.filter((p) => p.category === "premium").map((p) => (
-                          <option key={p.id} value={p.name}>
-                            {p.emoji} {p.name} — {formatPrice(p.price)}
-                          </option>
-                        ))}
-                      </optgroup>
-                    </select>
-                  </div>
-
-                  {/* Quantity + Date */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-neutral-700 mb-1.5">Jumlah</label>
-                      <input
-                        type="number"
-                        name="quantity"
-                        value={form.quantity}
-                        onChange={handleChange}
-                        min="1"
-                        max="100"
-                        className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-colors"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-neutral-700 mb-1.5">Tanggal Kirim</label>
-                      <input
-                        type="date"
-                        name="deliveryDate"
-                        value={form.deliveryDate}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-colors"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Notes */}
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-1.5">Catatan Tambahan</label>
-                    <textarea
-                      name="notes"
-                      value={form.notes}
-                      onChange={handleChange}
-                      placeholder="Pesan khusus, ucapan di kartu, dll."
-                      rows={2}
-                      className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-colors resize-none"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={!isValid}
-                    className="w-full btn-primary justify-center py-3.5 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none disabled:hover:shadow-none"
-                  >
-                    Lanjut ke WhatsApp →
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* Order Summary */}
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden sticky top-20">
-                <div className="px-6 py-4 border-b border-neutral-100">
-                  <h2 className="font-semibold text-neutral-900">Ringkasan Pesanan</h2>
-                </div>
-                <div className="p-6">
-                  {selectedProduct ? (
-                    <>
-                      <div className="text-center mb-4">
-                        <div className="text-3xl mb-2">{selectedProduct.emoji}</div>
-                        <div className="font-display font-semibold text-neutral-900">{selectedProduct.name}</div>
-                        <div className="text-sm text-accent font-medium mt-1">{formatPrice(selectedProduct.price)} / pcs</div>
-                      </div>
-                      <div className="bg-neutral-50 rounded-xl p-3 mb-4">
-                        <p className="text-xs font-medium text-neutral-500 mb-2">Isi Paket:</p>
-                        <ul className="space-y-1">
-                          {selectedProduct.items.slice(0, 5).map((item, i) => (
-                            <li key={i} className="text-xs text-neutral-600 flex items-center gap-1.5">
-                              <span className="w-1 h-1 rounded-full bg-accent" />
-                              {item}
-                            </li>
-                          ))}
-                          {selectedProduct.items.length > 5 && (
-                            <li className="text-xs text-neutral-400">+{selectedProduct.items.length - 5} item lainnya</li>
-                          )}
-                        </ul>
-                      </div>
-                      <div className="flex justify-between items-center text-sm mb-1">
-                        <span className="text-neutral-500">{formatPrice(selectedProduct.price)} × {form.quantity || 1}</span>
-                      </div>
-                      <div className="flex justify-between items-center border-t border-neutral-100 pt-3 mt-3">
-                        <span className="font-semibold">Total</span>
-                        <span className="font-display font-semibold text-accent text-lg">{formatPrice(totalPrice)}</span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-center py-8 text-neutral-400">
-                      <div className="text-3xl mb-2">📦</div>
-                      <p className="text-sm">Pilih paket untuk melihat ringkasan pesanan</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Contact Box */}
-              <div className="mt-4 bg-green-50 rounded-2xl border border-green-100 p-4">
-                <p className="text-sm font-medium text-green-800 mb-1">Butuh bantuan?</p>
-                <p className="text-xs text-green-600 mb-3">Hubungi kami langsung via WhatsApp</p>
-                <a
-                  href="https://wa.me/6208551234202"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors w-full justify-center"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                  </svg>
-                  Chat Sekarang
-                </a>
-              </div>
             </div>
           </div>
         )}

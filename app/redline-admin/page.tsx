@@ -321,6 +321,144 @@ function ProductModal({
 }
 
 /* ═══════════════════════════════════
+   DEBUG PANEL COMPONENT
+═══════════════════════════════════ */
+interface DebugResult {
+  env_check?: Record<string, string>;
+  diagnosis?: string;
+  solution?: string;
+  possible_causes?: string[];
+  get_test?: Record<string, unknown>;
+  get_response_raw?: string;
+  get_test_error?: string;
+  post_test?: Record<string, unknown>;
+  post_response?: Record<string, unknown>;
+  post_response_raw?: string;
+  post_test_error?: string;
+}
+
+function DebugPanel({ loading, result, onRun }: {
+  loading: boolean;
+  result: Record<string, unknown> | null;
+  onRun: () => void;
+}) {
+  const dr = result as DebugResult | null;
+
+  return (
+    <div className="max-w-3xl">
+      <div className="bg-white rounded-2xl border border-neutral-100 p-6 mb-4">
+        <h2 className="font-semibold text-neutral-900 mb-1">🔧 Debug Koneksi Google Sheets</h2>
+        <p className="text-sm text-neutral-500 mb-4">
+          Jalankan test ini untuk mengetahui secara pasti mengapa data tidak masuk ke Google Sheets.
+          Test ini akan mengirim data dummy ke spreadsheet kamu.
+        </p>
+        <button onClick={onRun} disabled={loading} className="btn-primary py-2.5 px-6 disabled:opacity-50">
+          {loading ? (
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Sedang test koneksi...
+            </span>
+          ) : "▶ Jalankan Debug Test"}
+        </button>
+      </div>
+
+      {dr && (
+        <div className="space-y-3">
+          {/* Env Check */}
+          {dr.env_check && (
+            <div className="bg-white rounded-2xl border border-neutral-100 p-5">
+              <h3 className="font-semibold text-sm text-neutral-700 mb-3">📋 Environment Variables</h3>
+              {Object.entries(dr.env_check).map(([k, v]) => (
+                <div key={k} className="flex gap-3 text-sm mb-2">
+                  <code className="text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded text-xs flex-shrink-0">{k}</code>
+                  <span className={v.startsWith("✅") ? "text-green-700" : v.startsWith("❌") ? "text-red-600" : "text-amber-600"}>{v}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Diagnosis */}
+          {dr.diagnosis && (
+            <div className={`rounded-2xl border p-5 ${
+              dr.diagnosis.startsWith("✅") ? "bg-green-50 border-green-200" :
+              dr.diagnosis.startsWith("❌") ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
+              <h3 className="font-semibold text-sm mb-2">🩺 Diagnosis</h3>
+              <p className="text-sm font-medium">{dr.diagnosis}</p>
+              {dr.solution && <p className="text-sm mt-2 text-neutral-600">💡 {dr.solution}</p>}
+              {dr.possible_causes && (
+                <ul className="mt-2 space-y-1">
+                  {dr.possible_causes.map((c, i) => <li key={i} className="text-sm text-neutral-600">• {c}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* GET Test */}
+          {dr.get_test && (
+            <div className="bg-white rounded-2xl border border-neutral-100 p-5">
+              <h3 className="font-semibold text-sm text-neutral-700 mb-3">🔍 Test GET</h3>
+              <div className="bg-neutral-50 rounded-xl p-3 font-mono text-xs overflow-x-auto">
+                <pre>{JSON.stringify(dr.get_test, null, 2)}</pre>
+              </div>
+              {dr.get_response_raw && (
+                <div className="mt-2 bg-red-50 rounded-xl p-3 text-xs text-red-700">
+                  <p className="font-semibold mb-1">⚠️ Response bukan JSON — Apps Script belum benar:</p>
+                  <pre className="whitespace-pre-wrap break-all">{dr.get_response_raw}</pre>
+                </div>
+              )}
+              {dr.get_test_error && <p className="mt-2 text-sm text-red-600">{dr.get_test_error}</p>}
+            </div>
+          )}
+
+          {/* POST Test */}
+          {dr.post_test && (
+            <div className="bg-white rounded-2xl border border-neutral-100 p-5">
+              <h3 className="font-semibold text-sm text-neutral-700 mb-3">📤 Test POST (kirim data)</h3>
+              <div className="bg-neutral-50 rounded-xl p-3 font-mono text-xs overflow-x-auto">
+                <pre>{JSON.stringify(dr.post_test, null, 2)}</pre>
+              </div>
+              {dr.post_response && (
+                <div className="mt-2 bg-neutral-50 rounded-xl p-3 font-mono text-xs">
+                  <pre>{JSON.stringify(dr.post_response, null, 2)}</pre>
+                </div>
+              )}
+              {dr.post_response_raw && (
+                <div className="mt-2 bg-red-50 rounded-xl p-3 text-xs text-red-700">
+                  <p className="font-semibold mb-1">⚠️ Response POST bukan JSON:</p>
+                  <pre className="whitespace-pre-wrap break-all">{dr.post_response_raw}</pre>
+                </div>
+              )}
+              {dr.post_test_error && <p className="mt-2 text-sm text-red-600">{dr.post_test_error}</p>}
+            </div>
+          )}
+
+          {/* Fix Guide */}
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
+            <h3 className="font-semibold text-sm text-blue-800 mb-3">📖 Panduan Fix Umum</h3>
+            <div className="space-y-2 text-sm text-blue-700">
+              <p><strong>1.</strong> Setiap edit kode Apps Script, harus <em>Deploy → New deployment</em> (bukan edit deployment lama)</p>
+              <p><strong>2.</strong> Setting: <em>Execute as: Me</em> dan <em>Who has access: Anyone</em></p>
+              <p><strong>3.</strong> Saat pertama deploy, Google minta Review Permissions — klik <strong>Allow</strong></p>
+              <p><strong>4.</strong> Format URL: <code className="bg-blue-100 px-1 rounded text-xs">https://script.google.com/macros/s/XXXXX/exec</code></p>
+              <p><strong>5.</strong> Setelah update env variable di Vercel, wajib klik <strong>Redeploy</strong></p>
+              <p><strong>6.</strong> Cek log di Apps Script: <em>View → Executions</em></p>
+            </div>
+          </div>
+
+          {/* Raw output */}
+          <details className="bg-white rounded-2xl border border-neutral-100 p-5">
+            <summary className="text-sm font-medium text-neutral-600 cursor-pointer">📄 Raw Debug Output</summary>
+            <div className="mt-3 bg-neutral-50 rounded-xl p-3 font-mono text-xs overflow-x-auto max-h-60">
+              <pre>{JSON.stringify(dr, null, 2)}</pre>
+            </div>
+          </details>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════ */
 function Dashboard({ onLogout }: { onLogout: () => void }) {
@@ -706,121 +844,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
         {/* ── DEBUG TAB ── */}
         {tab === "debug" && (
-          <div className="max-w-3xl">
-            <div className="bg-white rounded-2xl border border-neutral-100 p-6 mb-4">
-              <h2 className="font-semibold text-neutral-900 mb-1">🔧 Debug Koneksi Google Sheets</h2>
-              <p className="text-sm text-neutral-500 mb-4">
-                Jalankan test ini untuk mengetahui secara pasti mengapa data tidak masuk ke Google Sheets.
-                Test ini akan mengirim data dummy ke spreadsheet kamu.
-              </p>
-              <button onClick={runDebug} disabled={debugLoading} className="btn-primary py-2.5 px-6 disabled:opacity-50">
-                {debugLoading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Sedang test koneksi...
-                  </span>
-                ) : "▶ Jalankan Debug Test"}
-              </button>
-            </div>
-
-            {debugResult && (() => {
-              const dr = debugResult as Record<string, unknown>;
-              const envCheck = (dr.env_check || {}) as Record<string, string>;
-              const getTest = dr.get_test as Record<string, unknown> | undefined;
-              const postTest = dr.post_test as Record<string, unknown> | undefined;
-              const postResponse = dr.post_response as Record<string, unknown> | undefined;
-              return (
-              <div className="space-y-3">
-                {/* Env Check */}
-                <div className="bg-white rounded-2xl border border-neutral-100 p-5">
-                  <h3 className="font-semibold text-sm text-neutral-700 mb-3">📋 Environment Variables</h3>
-                  {Object.entries(envCheck).map(([k, v]) => (
-                    <div key={k} className="flex gap-3 text-sm mb-2">
-                      <code className="text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded text-xs flex-shrink-0">{k}</code>
-                      <span className={String(v).startsWith("✅") ? "text-green-700" : String(v).startsWith("❌") ? "text-red-600" : "text-amber-600"}>{v}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Diagnosis */}
-                {dr.diagnosis && (
-                  <div className={`rounded-2xl border p-5 ${
-                    String(dr.diagnosis).startsWith("✅") ? "bg-green-50 border-green-200" :
-                    String(dr.diagnosis).startsWith("❌") ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
-                    <h3 className="font-semibold text-sm mb-2">🩺 Diagnosis</h3>
-                    <p className="text-sm font-medium">{String(dr.diagnosis)}</p>
-                    {dr.solution && <p className="text-sm mt-2 text-neutral-600">💡 {String(dr.solution)}</p>}
-                    {Array.isArray(dr.possible_causes) && (
-                      <ul className="mt-2 space-y-1">
-                        {(dr.possible_causes as string[]).map((c, i) => <li key={i} className="text-sm text-neutral-600">• {c}</li>)}
-                      </ul>
-                    )}
-                  </div>
-                )}
-
-                {/* GET Test */}
-                {getTest && (
-                  <div className="bg-white rounded-2xl border border-neutral-100 p-5">
-                    <h3 className="font-semibold text-sm text-neutral-700 mb-3">🔍 Test GET</h3>
-                    <div className="bg-neutral-50 rounded-xl p-3 font-mono text-xs overflow-x-auto">
-                      <pre>{JSON.stringify(getTest, null, 2)}</pre>
-                    </div>
-                    {dr.get_response_raw && (
-                      <div className="mt-2 bg-red-50 rounded-xl p-3 text-xs text-red-700">
-                        <p className="font-semibold mb-1">⚠️ Response bukan JSON — kemungkinan Apps Script belum benar:</p>
-                        <pre className="whitespace-pre-wrap break-all">{String(dr.get_response_raw)}</pre>
-                      </div>
-                    )}
-                    {dr.get_test_error && <p className="mt-2 text-sm text-red-600">{String(dr.get_test_error)}</p>}
-                  </div>
-                )}
-
-                {/* POST Test */}
-                {postTest && (
-                  <div className="bg-white rounded-2xl border border-neutral-100 p-5">
-                    <h3 className="font-semibold text-sm text-neutral-700 mb-3">📤 Test POST (kirim data)</h3>
-                    <div className="bg-neutral-50 rounded-xl p-3 font-mono text-xs overflow-x-auto">
-                      <pre>{JSON.stringify(postTest, null, 2)}</pre>
-                    </div>
-                    {postResponse && (
-                      <div className="mt-2 bg-neutral-50 rounded-xl p-3 font-mono text-xs">
-                        <pre>{JSON.stringify(postResponse, null, 2)}</pre>
-                      </div>
-                    )}
-                    {dr.post_response_raw && (
-                      <div className="mt-2 bg-red-50 rounded-xl p-3 text-xs text-red-700">
-                        <p className="font-semibold mb-1">⚠️ Response POST bukan JSON:</p>
-                        <pre className="whitespace-pre-wrap break-all">{String(dr.post_response_raw)}</pre>
-                      </div>
-                    )}
-                    {dr.post_test_error && <p className="mt-2 text-sm text-red-600">{String(dr.post_test_error)}</p>}
-                  </div>
-                )}
-
-                {/* Fix Guide */}
-                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
-                  <h3 className="font-semibold text-sm text-blue-800 mb-3">📖 Panduan Fix Umum</h3>
-                  <div className="space-y-2 text-sm text-blue-700">
-                    <p><strong>1.</strong> Setiap edit kode Apps Script, harus <em>Deploy → New deployment</em> (bukan edit deployment lama)</p>
-                    <p><strong>2.</strong> Setting: <em>Execute as: Me</em> dan <em>Who has access: Anyone</em></p>
-                    <p><strong>3.</strong> Saat pertama deploy, Google minta Review Permissions — klik <strong>Allow</strong></p>
-                    <p><strong>4.</strong> Format URL yang benar: <code className="bg-blue-100 px-1 rounded text-xs">https://script.google.com/macros/s/XXXXX/exec</code></p>
-                    <p><strong>5.</strong> Setelah update env variable di Vercel, wajib klik <strong>Redeploy</strong></p>
-                    <p><strong>6.</strong> Cek log error: di Apps Script → <em>View → Executions</em></p>
-                  </div>
-                </div>
-
-                {/* Raw output */}
-                <details className="bg-white rounded-2xl border border-neutral-100 p-5">
-                  <summary className="text-sm font-medium text-neutral-600 cursor-pointer">📄 Raw Debug Output</summary>
-                  <div className="mt-3 bg-neutral-50 rounded-xl p-3 font-mono text-xs overflow-x-auto max-h-60">
-                    <pre>{JSON.stringify(dr, null, 2)}</pre>
-                  </div>
-                </details>
-              </div>
-              );
-            })()}
-          </div>
+          <DebugPanel
+            loading={debugLoading}
+            result={debugResult}
+            onRun={runDebug}
+          />
         )}
 
       </div>

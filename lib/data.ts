@@ -6,6 +6,8 @@ export interface Product {
   items: string[];
   emoji: string;
   popular?: boolean;
+  order?: number;
+  imageUrl?: string; // URL foto dari Cloudinary atau path lokal
 }
 
 export const products: Product[] = [

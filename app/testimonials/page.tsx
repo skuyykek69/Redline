@@ -12,22 +12,36 @@ interface Testimonial {
   date?: string;
 }
 
+interface Product {
+  id: number;
+  name: string;
+}
+
 export default function TestimonialsPage() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>(staticTestimonials);
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", location: "", packageName: "", text: "", rating: 5 });
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
 
-  // Fetch gabungan: hardcode + approved dari Sheets
   useEffect(() => {
+    // Fetch testimoni yang sudah approved
     fetch("/api/testimonials")
       .then((r) => r.json())
       .then((data) => {
-        if (data.testimonials?.length > 0) {
-          setTestimonials(data.testimonials);
+        if (data.testimonials?.length > 0) setTestimonials(data.testimonials);
+      })
+      .catch(() => {});
+
+    // Fetch daftar produk realtime untuk dropdown form
+    fetch("/api/products")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.products?.length > 0) {
+          setCatalogProducts(data.products.map((p: Product) => ({ id: p.id, name: p.name })));
         }
       })
-      .catch(() => {/* tetap pakai hardcode */});
+      .catch(() => {});
   }, []);
 
   const avgRating = testimonials.length > 0
@@ -77,7 +91,6 @@ export default function TestimonialsPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-        {/* Success notification */}
         {status === "success" && (
           <div className="mb-6 bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center gap-3">
             <span className="text-2xl">✅</span>
@@ -145,41 +158,66 @@ export default function TestimonialsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-1.5">Nama <span className="text-red-400">*</span></label>
-                  <input type="text" required value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                  <input type="text" required value={form.name}
+                    onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                     placeholder="Nama kamu"
                     className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-1.5">Kota</label>
-                  <input type="text" value={form.location} onChange={(e) => setForm((p) => ({ ...p, location: e.target.value }))}
+                  <input type="text" value={form.location}
+                    onChange={(e) => setForm((p) => ({ ...p, location: e.target.value }))}
                     placeholder="Kota kamu"
                     className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20" />
                 </div>
               </div>
+
+              {/* Dropdown paket — realtime dari katalog */}
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1.5">Paket yang Dibeli</label>
-                <select value={form.packageName} onChange={(e) => setForm((p) => ({ ...p, packageName: e.target.value }))}
-                  className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 bg-white">
+                <select
+                  value={form.packageName}
+                  onChange={(e) => setForm((p) => ({ ...p, packageName: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 bg-white"
+                >
                   <option value="">-- Pilih paket --</option>
-                  {Array.from({ length: 10 }, (_, i) => <option key={i} value={`Paket ${i + 1}`}>Paket {i + 1}</option>)}
+                  {catalogProducts.length > 0
+                    ? catalogProducts.map((p) => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))
+                    : Array.from({ length: 10 }, (_, i) => (
+                        <option key={i} value={`Paket ${i + 1}`}>Paket {i + 1}</option>
+                      ))
+                  }
                 </select>
+                {catalogProducts.length > 0 && (
+                  <p className="text-xs text-neutral-400 mt-1">
+                    {catalogProducts.length} paket tersedia · diperbarui realtime
+                  </p>
+                )}
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-2">Rating</label>
                 <div className="flex gap-2">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button key={star} type="button"
                       onClick={() => setForm((p) => ({ ...p, rating: star }))}
-                      className={`text-2xl transition-transform hover:scale-110 ${star <= form.rating ? "text-amber-400" : "text-neutral-200"}`}>★</button>
+                      className={`text-2xl transition-transform hover:scale-110 ${star <= form.rating ? "text-amber-400" : "text-neutral-200"}`}>
+                      ★
+                    </button>
                   ))}
                 </div>
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1.5">Ulasan <span className="text-red-400">*</span></label>
-                <textarea required value={form.text} onChange={(e) => setForm((p) => ({ ...p, text: e.target.value }))}
+                <textarea required value={form.text}
+                  onChange={(e) => setForm((p) => ({ ...p, text: e.target.value }))}
                   placeholder="Ceritakan pengalaman kamu..." rows={4}
                   className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 resize-none" />
               </div>
+
               {status === "error" && (
                 <p className="text-red-500 text-sm">Gagal mengirim. Coba lagi atau hubungi kami via WA.</p>
               )}

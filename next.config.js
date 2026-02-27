@@ -2,7 +2,13 @@
 const nextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
-    // Untuk logo dan foto lokal di /public tidak perlu domain
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        pathname: "/**",
+      },
+    ],
   },
 };
 

@@ -10,9 +10,9 @@ export default function Footer() {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white text-sm font-bold">R</div>
+              <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white text-sm font-bold">R</div>
               <span className="font-display text-lg font-semibold text-white">
-                Redline <span className="text-accent">Production</span>
+                <span className="text-red-500">Redline</span> <span className="text-white">Production</span>
               </span>
             </div>
             <p className="text-sm leading-relaxed text-neutral-400 mb-4">

@@ -511,28 +511,44 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   /* ── Product Actions ── */
   const handleSaveProduct = async (formData: Partial<Product>, file?: File) => {
     try {
-      // Upload foto jika ada
-      if (file && formData.id) {
+      let imageUrl = formData.imageUrl || "";
+
+      // Upload foto ke Cloudinary jika ada file baru
+      if (file) {
+        const productId = formData.id || Date.now(); // gunakan timestamp sebagai ID sementara jika produk baru
         const fd = new FormData();
         fd.append("file", file);
-        fd.append("productId", String(formData.id));
-        await fetch("/api/admin/upload", { method: "POST", body: fd });
+        fd.append("productId", String(productId));
+
+        const uploadRes = await fetch("/api/admin/upload", { method: "POST", body: fd });
+        const uploadData = await uploadRes.json();
+
+        if (uploadData.success && uploadData.url) {
+          imageUrl = uploadData.url; // URL Cloudinary
+        } else if (uploadData.setup_required) {
+          // Cloudinary belum disetup — simpan produk tanpa foto, beri tahu user
+          showToast("Produk disimpan tanpa foto (setup Cloudinary dulu)", "error");
+        } else {
+          showToast(`Upload foto gagal: ${uploadData.error || "Unknown error"}`, "error");
+        }
       }
 
       const isEdit = modal === "edit";
       const res = await fetch("/api/admin/products", {
         method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, imageUrl }),
       });
 
-      if (!res.ok) throw new Error();
+      const resData = await res.json();
+      if (!resData.success && res.status !== 200) throw new Error(resData.error);
+
       showToast(isEdit ? "Produk berhasil diupdate!" : "Produk berhasil ditambahkan!");
       setModal(null);
       setEditProduct(null);
       await fetchProducts();
-    } catch {
-      showToast("Gagal menyimpan produk", "error");
+    } catch (err) {
+      showToast(`Gagal menyimpan produk: ${err instanceof Error ? err.message : "Unknown"}`, "error");
     }
   };
 

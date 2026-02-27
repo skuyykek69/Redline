@@ -41,8 +41,8 @@ export default function Navbar() {
               className="w-full h-full object-cover"
             />
           </div>
-          <span className="font-display text-lg font-semibold text-neutral-900">
-            Redline<span className="text-accent"> Production</span>
+          <span className="font-display text-lg font-semibold">
+            <span className="text-red-600">Redline</span><span className="text-neutral-900"> Production</span>
           </span>
         </Link>
 

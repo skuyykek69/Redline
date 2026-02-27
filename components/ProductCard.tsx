@@ -13,6 +13,7 @@ interface ProductCardProps {
 export default function ProductCard({ product, index = 0 }: ProductCardProps) {
   const { addItem, items } = useCart();
   const [added, setAdded] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const inCart = items.find((i) => i.product.id === product.id);
 
   const handleAddToCart = () => {
@@ -21,6 +22,9 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
     setTimeout(() => setAdded(false), 1500);
   };
 
+  // Prioritas: imageUrl dari Sheets/Cloudinary → path lokal → emoji fallback
+  const imageSrc = product.imageUrl || `/images/paket-${product.id}.jpg`;
+
   const waMessage = encodeURIComponent(
     `Halo Redline Production, saya ingin memesan *${product.name}* (${formatPrice(product.price)}). Mohon info ketersediaan. Terima kasih! 🎁`
   );
@@ -28,29 +32,32 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
   return (
     <div className="card group flex flex-col" style={{ animationDelay: `${index * 80}ms` }}>
       {/* Product Image */}
-      <div className="relative w-full aspect-[4/3] overflow-hidden bg-gradient-to-br from-primary-50 to-accent-light/30">
-        <Image
-          src={`/images/paket-${product.id}.jpg`}
-          alt={product.name}
-          fill
-          className="object-cover transition-transform duration-500 group-hover:scale-105"
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-        />
-        {/* Overlay badges */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+      <div className="relative w-full aspect-[4/3] overflow-hidden bg-gradient-to-br from-primary-50 to-accent-light/30 flex items-center justify-center">
+        {!imgError ? (
+          <Image
+            src={imageSrc}
+            alt={product.name}
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            onError={() => setImgError(true)}
+            unoptimized={!!product.imageUrl} // skip optimization untuk URL eksternal
+          />
+        ) : (
+          // Fallback: emoji besar
+          <span className="text-6xl select-none">{product.emoji}</span>
+        )}
+
+        {/* Overlay */}
+        {!imgError && <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />}
+
+        {/* Badges */}
         {product.popular && (
           <span className="absolute top-3 right-3 badge bg-accent text-white shadow-sm">⭐ Populer</span>
         )}
         {product.category === "premium" && (
           <span className="absolute top-3 left-3 badge bg-neutral-900 text-white shadow-sm">👑 Premium</span>
         )}
-        {/* Emoji fallback overlay */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-0">
-          <span className="text-5xl">{product.emoji}</span>
-        </div>
       </div>
 
       {/* Card Content */}
@@ -60,8 +67,6 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
           <span className="text-accent font-semibold text-base whitespace-nowrap">{formatPrice(product.price)}</span>
         </div>
         <p className="text-xs text-neutral-400 mb-3">{product.items.length} item dalam paket</p>
-
-        {/* Items preview */}
         <div className="flex flex-wrap gap-1 mb-1">
           {product.items.slice(0, 4).map((item, i) => (
             <span key={i} className="text-xs bg-neutral-100 text-neutral-500 px-2 py-0.5 rounded-full">{item}</span>
@@ -76,7 +81,6 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
 
       {/* CTA Buttons */}
       <div className="px-5 pb-5 pt-3 flex flex-col gap-2">
-        {/* Add to Cart */}
         <button
           onClick={handleAddToCart}
           className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
@@ -87,13 +91,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
               : "bg-accent text-white hover:bg-accent-dark hover:shadow-md"
           }`}
         >
-          {added ? (
-            <>✓ Ditambahkan!</>
-          ) : inCart ? (
-            <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg> Tambah Lagi ({inCart.qty})</>
-          ) : (
-            <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg> Tambah ke Keranjang</>
-          )}
+          {added ? "✓ Ditambahkan!" : inCart ? `🛒 Tambah Lagi (${inCart.qty})` : "🛒 Tambah ke Keranjang"}
         </button>
 
         <div className="flex gap-2">

@@ -12,6 +12,7 @@ interface Product {
   emoji: string;
   popular?: boolean;
   order?: number;
+  imageUrl?: string;
 }
 interface Testimonial {
   id: number;

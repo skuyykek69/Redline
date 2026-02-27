@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
+import ProductThumb from "@/components/ProductThumb";
 
 /* ─── Types ─── */
 interface Product {
@@ -789,12 +790,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                       className="w-6 h-6 rounded-lg hover:bg-neutral-100 flex items-center justify-center text-neutral-400 disabled:opacity-20 transition-colors text-xs">▼</button>
                   </div>
 
-                  {/* Photo */}
-                  <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-primary-50 flex-shrink-0">
-                    <Image src={`/images/paket-${product.id}.jpg`} alt={product.name} fill className="object-cover"
-                      onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                    <div className="absolute inset-0 flex items-center justify-center text-xl">{product.emoji}</div>
-                  </div>
+                  {/* Photo — pakai ProductThumb agar support Cloudinary */}
+                  <ProductThumb product={product} size={56} rounded="rounded-xl" />
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">

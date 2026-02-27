@@ -723,12 +723,18 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
               </button>
             </div>
 
-            {debugResult && (
+            {debugResult && (() => {
+              const dr = debugResult as Record<string, unknown>;
+              const envCheck = (dr.env_check || {}) as Record<string, string>;
+              const getTest = dr.get_test as Record<string, unknown> | undefined;
+              const postTest = dr.post_test as Record<string, unknown> | undefined;
+              const postResponse = dr.post_response as Record<string, unknown> | undefined;
+              return (
               <div className="space-y-3">
                 {/* Env Check */}
                 <div className="bg-white rounded-2xl border border-neutral-100 p-5">
                   <h3 className="font-semibold text-sm text-neutral-700 mb-3">📋 Environment Variables</h3>
-                  {Object.entries((debugResult.env_check as Record<string, string>) || {}).map(([k, v]) => (
+                  {Object.entries(envCheck).map(([k, v]) => (
                     <div key={k} className="flex gap-3 text-sm mb-2">
                       <code className="text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded text-xs flex-shrink-0">{k}</code>
                       <span className={String(v).startsWith("✅") ? "text-green-700" : String(v).startsWith("❌") ? "text-red-600" : "text-amber-600"}>{v}</span>
@@ -737,57 +743,57 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                 </div>
 
                 {/* Diagnosis */}
-                {debugResult.diagnosis && (
+                {dr.diagnosis && (
                   <div className={`rounded-2xl border p-5 ${
-                    String(debugResult.diagnosis).startsWith("✅") ? "bg-green-50 border-green-200" :
-                    String(debugResult.diagnosis).startsWith("❌") ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
+                    String(dr.diagnosis).startsWith("✅") ? "bg-green-50 border-green-200" :
+                    String(dr.diagnosis).startsWith("❌") ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
                     <h3 className="font-semibold text-sm mb-2">🩺 Diagnosis</h3>
-                    <p className="text-sm font-medium">{String(debugResult.diagnosis)}</p>
-                    {debugResult.solution && <p className="text-sm mt-2 text-neutral-600">💡 {String(debugResult.solution)}</p>}
-                    {Array.isArray(debugResult.possible_causes) && (
+                    <p className="text-sm font-medium">{String(dr.diagnosis)}</p>
+                    {dr.solution && <p className="text-sm mt-2 text-neutral-600">💡 {String(dr.solution)}</p>}
+                    {Array.isArray(dr.possible_causes) && (
                       <ul className="mt-2 space-y-1">
-                        {(debugResult.possible_causes as string[]).map((c, i) => <li key={i} className="text-sm text-neutral-600">• {c}</li>)}
+                        {(dr.possible_causes as string[]).map((c, i) => <li key={i} className="text-sm text-neutral-600">• {c}</li>)}
                       </ul>
                     )}
                   </div>
                 )}
 
                 {/* GET Test */}
-                {debugResult.get_test && (
+                {getTest && (
                   <div className="bg-white rounded-2xl border border-neutral-100 p-5">
                     <h3 className="font-semibold text-sm text-neutral-700 mb-3">🔍 Test GET</h3>
                     <div className="bg-neutral-50 rounded-xl p-3 font-mono text-xs overflow-x-auto">
-                      <pre>{JSON.stringify(debugResult.get_test, null, 2)}</pre>
+                      <pre>{JSON.stringify(getTest, null, 2)}</pre>
                     </div>
-                    {debugResult.get_response_raw && (
+                    {dr.get_response_raw && (
                       <div className="mt-2 bg-red-50 rounded-xl p-3 text-xs text-red-700">
                         <p className="font-semibold mb-1">⚠️ Response bukan JSON — kemungkinan Apps Script belum benar:</p>
-                        <pre className="whitespace-pre-wrap break-all">{String(debugResult.get_response_raw)}</pre>
+                        <pre className="whitespace-pre-wrap break-all">{String(dr.get_response_raw)}</pre>
                       </div>
                     )}
-                    {debugResult.get_test_error && <p className="mt-2 text-sm text-red-600">{String(debugResult.get_test_error)}</p>}
+                    {dr.get_test_error && <p className="mt-2 text-sm text-red-600">{String(dr.get_test_error)}</p>}
                   </div>
                 )}
 
                 {/* POST Test */}
-                {debugResult.post_test && (
+                {postTest && (
                   <div className="bg-white rounded-2xl border border-neutral-100 p-5">
                     <h3 className="font-semibold text-sm text-neutral-700 mb-3">📤 Test POST (kirim data)</h3>
                     <div className="bg-neutral-50 rounded-xl p-3 font-mono text-xs overflow-x-auto">
-                      <pre>{JSON.stringify(debugResult.post_test, null, 2)}</pre>
+                      <pre>{JSON.stringify(postTest, null, 2)}</pre>
                     </div>
-                    {debugResult.post_response && (
+                    {postResponse && (
                       <div className="mt-2 bg-neutral-50 rounded-xl p-3 font-mono text-xs">
-                        <pre>{JSON.stringify(debugResult.post_response, null, 2)}</pre>
+                        <pre>{JSON.stringify(postResponse, null, 2)}</pre>
                       </div>
                     )}
-                    {debugResult.post_response_raw && (
+                    {dr.post_response_raw && (
                       <div className="mt-2 bg-red-50 rounded-xl p-3 text-xs text-red-700">
                         <p className="font-semibold mb-1">⚠️ Response POST bukan JSON:</p>
-                        <pre className="whitespace-pre-wrap break-all">{String(debugResult.post_response_raw)}</pre>
+                        <pre className="whitespace-pre-wrap break-all">{String(dr.post_response_raw)}</pre>
                       </div>
                     )}
-                    {debugResult.post_test_error && <p className="mt-2 text-sm text-red-600">{String(debugResult.post_test_error)}</p>}
+                    {dr.post_test_error && <p className="mt-2 text-sm text-red-600">{String(dr.post_test_error)}</p>}
                   </div>
                 )}
 
@@ -808,11 +814,12 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                 <details className="bg-white rounded-2xl border border-neutral-100 p-5">
                   <summary className="text-sm font-medium text-neutral-600 cursor-pointer">📄 Raw Debug Output</summary>
                   <div className="mt-3 bg-neutral-50 rounded-xl p-3 font-mono text-xs overflow-x-auto max-h-60">
-                    <pre>{JSON.stringify(debugResult, null, 2)}</pre>
+                    <pre>{JSON.stringify(dr, null, 2)}</pre>
                   </div>
                 </details>
               </div>
-            )}
+              );
+            })()}
           </div>
         )}
 

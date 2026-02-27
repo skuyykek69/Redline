@@ -14,6 +14,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
   const { addItem, items } = useCart();
   const [added, setAdded] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
   const inCart = items.find((i) => i.product.id === product.id);
 
   const handleAddToCart = () => {
@@ -22,15 +23,23 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
     setTimeout(() => setAdded(false), 1500);
   };
 
-  // Prioritas: imageUrl dari Sheets/Cloudinary → path lokal → emoji fallback
+  // Prioritas: imageUrl (base64 atau Cloudinary URL) → path lokal → emoji fallback
   const imageSrc = product.imageUrl || `/images/paket-${product.id}.jpg`;
+  const isUnoptimized = !!product.imageUrl && (
+    product.imageUrl.startsWith("data:") || product.imageUrl.startsWith("http")
+  );
 
   const waMessage = encodeURIComponent(
     `Halo Redline Production, saya ingin memesan *${product.name}* (${formatPrice(product.price)}). Mohon info ketersediaan. Terima kasih! 🎁`
   );
 
   return (
-    <div className="card group flex flex-col" style={{ animationDelay: `${index * 80}ms` }}>
+    <div
+      className="card group flex flex-col relative overflow-hidden"
+      style={{ animationDelay: `${index * 80}ms` }}
+      onMouseEnter={() => setShowDetail(true)}
+      onMouseLeave={() => setShowDetail(false)}
+    >
       {/* Product Image */}
       <div className="relative w-full aspect-[4/3] overflow-hidden bg-gradient-to-br from-primary-50 to-accent-light/30 flex items-center justify-center">
         {!imgError ? (
@@ -41,23 +50,66 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
             className="object-cover transition-transform duration-500 group-hover:scale-105"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             onError={() => setImgError(true)}
-            unoptimized={!!product.imageUrl} // skip optimization untuk URL eksternal
+            unoptimized={isUnoptimized}
           />
         ) : (
-          // Fallback: emoji besar
           <span className="text-6xl select-none">{product.emoji}</span>
         )}
-
-        {/* Overlay */}
         {!imgError && <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />}
 
-        {/* Badges */}
         {product.popular && (
           <span className="absolute top-3 right-3 badge bg-accent text-white shadow-sm">⭐ Populer</span>
         )}
         {product.category === "premium" && (
           <span className="absolute top-3 left-3 badge bg-neutral-900 text-white shadow-sm">👑 Premium</span>
         )}
+
+        {/* Detail overlay — slide up on hover/tap */}
+        <div
+          className={`absolute inset-0 bg-neutral-900/92 backdrop-blur-sm flex flex-col justify-between p-4 transition-all duration-300 ${
+            showDetail ? "opacity-100 translate-y-0" : "opacity-0 translate-y-full"
+          }`}
+        >
+          {/* Header overlay */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-white font-semibold text-sm">{product.emoji} {product.name}</span>
+              <span className="text-accent font-bold text-sm">{formatPrice(product.price)}</span>
+            </div>
+            <p className="text-neutral-400 text-xs mb-2 uppercase tracking-wide font-medium">
+              {product.items.length} item dalam paket:
+            </p>
+            {/* Items list — scrollable jika banyak */}
+            <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1 custom-scroll">
+              {product.items.map((item, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0 mt-0.5" />
+                  <span className="text-neutral-200 text-xs leading-snug">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Quick action from overlay */}
+          <button
+            onClick={(e) => { e.stopPropagation(); handleAddToCart(); }}
+            className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all mt-3 ${
+              added ? "bg-green-500 text-white" : "bg-accent hover:bg-accent-dark text-white"
+            }`}
+          >
+            {added ? "✓ Ditambahkan!" : "🛒 Tambah ke Keranjang"}
+          </button>
+        </div>
+
+        {/* Hint icon — visible when not hovered */}
+        <div className={`absolute bottom-2 right-2 transition-opacity duration-200 ${showDetail ? "opacity-0" : "opacity-100"}`}>
+          <div className="bg-black/40 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1">
+            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-white text-xs">Detail</span>
+          </div>
+        </div>
       </div>
 
       {/* Card Content */}
@@ -66,15 +118,20 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
           <h3 className="font-display text-lg font-semibold text-neutral-900">{product.name}</h3>
           <span className="text-accent font-semibold text-base whitespace-nowrap">{formatPrice(product.price)}</span>
         </div>
-        <p className="text-xs text-neutral-400 mb-3">{product.items.length} item dalam paket</p>
+        <p className="text-xs text-neutral-400 mb-3">{product.items.length} item · hover/tap kartu untuk lihat detail</p>
+
+        {/* Preview items — hanya 3 item pertama */}
         <div className="flex flex-wrap gap-1 mb-1">
-          {product.items.slice(0, 4).map((item, i) => (
+          {product.items.slice(0, 3).map((item, i) => (
             <span key={i} className="text-xs bg-neutral-100 text-neutral-500 px-2 py-0.5 rounded-full">{item}</span>
           ))}
-          {product.items.length > 4 && (
-            <span className="text-xs bg-neutral-100 text-neutral-400 px-2 py-0.5 rounded-full">
-              +{product.items.length - 4} lainnya
-            </span>
+          {product.items.length > 3 && (
+            <button
+              onClick={() => setShowDetail(true)}
+              className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full hover:bg-accent/20 transition-colors"
+            >
+              +{product.items.length - 3} lainnya →
+            </button>
           )}
         </div>
       </div>
@@ -93,12 +150,10 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
         >
           {added ? "✓ Ditambahkan!" : inCart ? `🛒 Tambah Lagi (${inCart.qty})` : "🛒 Tambah ke Keranjang"}
         </button>
-
         <div className="flex gap-2">
           <a
             href={`https://wa.me/6208551234202?text=${waMessage}`}
-            target="_blank"
-            rel="noopener noreferrer"
+            target="_blank" rel="noopener noreferrer"
             className="flex-1 inline-flex items-center justify-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-medium py-2 rounded-xl transition-colors border border-green-200"
           >
             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
@@ -114,6 +169,14 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
           </Link>
         </div>
       </div>
+
+      {/* Mobile tap overlay toggle — visible on touch devices */}
+      <button
+        className="absolute top-2 left-1/2 -translate-x-1/2 md:hidden z-10 bg-black/40 backdrop-blur-sm rounded-full px-3 py-1 text-white text-xs flex items-center gap-1"
+        onClick={() => setShowDetail(v => !v)}
+      >
+        {showDetail ? "✕ Tutup" : "👁 Lihat Isi Paket"}
+      </button>
     </div>
   );
 }

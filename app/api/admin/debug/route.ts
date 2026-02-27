@@ -1,121 +1,120 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
-  // Cek session
   const session = req.cookies.get("admin_session")?.value;
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const SHEET_URL = process.env.GOOGLE_SHEETS_WEBAPP_URL;
+  const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
+  const UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET;
+
   const results: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
     env_check: {
       GOOGLE_SHEETS_WEBAPP_URL: SHEET_URL
         ? `✅ Set (${SHEET_URL.slice(0, 60)}...)`
-        : "❌ TIDAK ADA — env variable belum diset",
-      ADMIN_PASSWORD: process.env.ADMIN_PASSWORD
-        ? "✅ Set"
-        : "⚠️ Tidak diset (menggunakan default)",
+        : "❌ TIDAK ADA",
+      ADMIN_PASSWORD: process.env.ADMIN_PASSWORD ? "✅ Set" : "⚠️ Menggunakan default",
+      CLOUDINARY_CLOUD_NAME: CLOUD_NAME
+        ? `✅ Set → "${CLOUD_NAME}"`
+        : "❌ TIDAK ADA — upload foto tidak akan berfungsi",
+      CLOUDINARY_UPLOAD_PRESET: UPLOAD_PRESET
+        ? `✅ Set → "${UPLOAD_PRESET}"`
+        : "❌ TIDAK ADA — upload foto tidak akan berfungsi",
     },
   };
 
-  if (!SHEET_URL) {
-    results.diagnosis = "❌ GOOGLE_SHEETS_WEBAPP_URL belum diset di environment variable Vercel";
-    results.solution = "Tambahkan GOOGLE_SHEETS_WEBAPP_URL di Vercel → Settings → Environment Variables, lalu Redeploy";
-    return NextResponse.json(results);
-  }
-
-  // Test GET request ke Sheets
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-
-    const getRes = await fetch(`${SHEET_URL}?action=getApproved`, {
-      signal: controller.signal,
-      cache: "no-store",
-    });
-    clearTimeout(timeout);
-
-    results.get_test = {
-      status: getRes.status,
-      status_text: getRes.statusText,
-      ok: getRes.ok,
-      content_type: getRes.headers.get("content-type"),
-    };
-
-    const getBody = await getRes.text();
+  // ── Test Cloudinary ──
+  if (CLOUD_NAME && UPLOAD_PRESET) {
     try {
-      results.get_response = JSON.parse(getBody);
-    } catch {
-      results.get_response_raw = getBody.slice(0, 500);
-      results.get_parse_error = "Response bukan JSON valid — kemungkinan Apps Script belum di-deploy atau ada error di script";
+      // Buat gambar 1x1 pixel PNG sebagai test upload
+      const pixel = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "base64"
+      );
+      const testBlob = new Blob([pixel], { type: "image/png" });
+
+      const uploadFd = new FormData();
+      uploadFd.append("file", testBlob, "test.png");
+      uploadFd.append("upload_preset", UPLOAD_PRESET);
+      uploadFd.append("public_id", "redline/debug-test");
+      uploadFd.append("overwrite", "true");
+
+      const cloudRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+        { method: "POST", body: uploadFd }
+      );
+
+      const cloudText = await cloudRes.text();
+      let cloudData: Record<string, unknown> = {};
+      try { cloudData = JSON.parse(cloudText); } catch { /**/ }
+
+      if (cloudRes.ok && cloudData.secure_url) {
+        results.cloudinary_test = {
+          status: "✅ BERHASIL",
+          test_url: cloudData.secure_url,
+          message: "Upload ke Cloudinary berhasil! Foto produk seharusnya bisa diupload.",
+        };
+      } else {
+        const errMsg = (cloudData.error as Record<string,string>)?.message || cloudText.slice(0, 200);
+        results.cloudinary_test = {
+          status: "❌ GAGAL",
+          http_status: cloudRes.status,
+          error: errMsg,
+          diagnosis:
+            cloudRes.status === 400
+              ? `Upload preset "${UPLOAD_PRESET}" tidak ditemukan atau mode bukan Unsigned. Pastikan preset ada dan mode = Unsigned di Cloudinary Settings → Upload.`
+              : cloudRes.status === 401
+              ? `Cloud name "${CLOUD_NAME}" salah atau tidak valid.`
+              : `Error tidak dikenal (HTTP ${cloudRes.status})`,
+        };
+      }
+    } catch (err) {
+      results.cloudinary_test = { status: "❌ Exception", error: String(err) };
     }
-  } catch (err: unknown) {
-    const error = err as Error;
-    results.get_test_error = error.name === "AbortError"
-      ? "❌ TIMEOUT — Apps Script tidak merespons dalam 10 detik"
-      : `❌ ${error.message}`;
-  }
-
-  // Test POST request ke Sheets
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-
-    const postRes = await fetch(SHEET_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "addTestimonial",
-        name: "DEBUG TEST",
-        location: "Debug",
-        package: "Paket 1",
-        rating: 5,
-        text: "Ini adalah pesan debug otomatis — boleh dihapus dari spreadsheet",
-        timestamp: new Date().toISOString(),
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    results.post_test = {
-      status: postRes.status,
-      ok: postRes.ok,
+  } else {
+    results.cloudinary_test = {
+      status: "⚠️ Tidak ditest",
+      reason: "CLOUDINARY_CLOUD_NAME atau CLOUDINARY_UPLOAD_PRESET belum diset",
     };
-
-    const postBody = await postRes.text();
-    try {
-      results.post_response = JSON.parse(postBody);
-    } catch {
-      results.post_response_raw = postBody.slice(0, 500);
-      results.post_parse_error = "Response POST bukan JSON — periksa Apps Script";
-    }
-  } catch (err: unknown) {
-    const error = err as Error;
-    results.post_test_error = error.name === "AbortError"
-      ? "❌ TIMEOUT pada POST request"
-      : `❌ ${error.message}`;
   }
 
-  // Diagnosis otomatis
-  const getOk = (results.get_test as Record<string, unknown>)?.ok === true;
-  const postOk = (results.post_test as Record<string, unknown>)?.ok === true;
-  const postSuccess = (results.post_response as Record<string, unknown>)?.success === true;
+  // ── Test Google Sheets ──
+  if (SHEET_URL) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const getRes = await fetch(`${SHEET_URL}?action=getApproved`, { signal: controller.signal, cache: "no-store" });
+      clearTimeout(timeout);
 
-  if (getOk && postOk && postSuccess) {
-    results.diagnosis = "✅ Koneksi Google Sheets BERHASIL! Data debug test sudah masuk ke spreadsheet.";
-  } else if (!getOk && !postOk) {
-    results.diagnosis = "❌ Tidak bisa terhubung ke Google Sheets sama sekali";
-    results.possible_causes = [
-      "Apps Script belum di-deploy sebagai Web App",
-      "URL Apps Script salah di environment variable",
-      "Apps Script di-deploy dengan 'Execute as: Me' tapi akun Google bermasalah",
-      "Perlu deploy ulang Apps Script (New Deployment)",
-    ];
-  } else if (getOk && !postSuccess) {
-    results.diagnosis = "⚠️ GET berhasil tapi POST gagal — ada error di fungsi doPost() Apps Script";
-    results.solution = "Cek log Apps Script: buka Apps Script → View → Executions";
+      results.sheets_get_test = { status: getRes.status, ok: getRes.ok };
+      const body = await getRes.text();
+      try { results.sheets_get_response = JSON.parse(body); }
+      catch { results.sheets_get_raw = body.slice(0, 300); }
+    } catch (err) {
+      results.sheets_get_error = String(err);
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const postRes = await fetch(SHEET_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "addTestimonial", name: "DEBUG TEST", location: "Debug",
+          package: "Test", rating: 5, text: "Debug test — boleh dihapus", timestamp: new Date().toISOString() }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      results.sheets_post_test = { status: postRes.status, ok: postRes.ok };
+      const body = await postRes.text();
+      try { results.sheets_post_response = JSON.parse(body); }
+      catch { results.sheets_post_raw = body.slice(0, 300); }
+    } catch (err) {
+      results.sheets_post_error = String(err);
+    }
   }
 
   return NextResponse.json(results, { status: 200 });

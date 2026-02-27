@@ -336,6 +336,23 @@ interface DebugResult {
   post_response?: Record<string, unknown>;
   post_response_raw?: string;
   post_test_error?: string;
+  cloudinary_test?: {
+    status: string;
+    test_url?: string;
+    message?: string;
+    error?: string;
+    diagnosis?: string;
+    reason?: string;
+    http_status?: number;
+  };
+  sheets_get_test?: Record<string, unknown>;
+  sheets_get_response?: Record<string, unknown>;
+  sheets_get_raw?: string;
+  sheets_get_error?: string;
+  sheets_post_test?: Record<string, unknown>;
+  sheets_post_response?: Record<string, unknown>;
+  sheets_post_raw?: string;
+  sheets_post_error?: string;
 }
 
 function DebugPanel({ loading, result, onRun }: {
@@ -348,16 +365,15 @@ function DebugPanel({ loading, result, onRun }: {
   return (
     <div className="max-w-3xl">
       <div className="bg-white rounded-2xl border border-neutral-100 p-6 mb-4">
-        <h2 className="font-semibold text-neutral-900 mb-1">🔧 Debug Koneksi Google Sheets</h2>
+        <h2 className="font-semibold text-neutral-900 mb-1">🔧 Debug Koneksi</h2>
         <p className="text-sm text-neutral-500 mb-4">
-          Jalankan test ini untuk mengetahui secara pasti mengapa data tidak masuk ke Google Sheets.
-          Test ini akan mengirim data dummy ke spreadsheet kamu.
+          Test koneksi Google Sheets dan Cloudinary sekaligus. Hasil akan menunjukkan persis di mana masalahnya.
         </p>
         <button onClick={onRun} disabled={loading} className="btn-primary py-2.5 px-6 disabled:opacity-50">
           {loading ? (
             <span className="flex items-center gap-2">
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Sedang test koneksi...
+              Sedang test...
             </span>
           ) : "▶ Jalankan Debug Test"}
         </button>
@@ -370,7 +386,7 @@ function DebugPanel({ loading, result, onRun }: {
             <div className="bg-white rounded-2xl border border-neutral-100 p-5">
               <h3 className="font-semibold text-sm text-neutral-700 mb-3">📋 Environment Variables</h3>
               {Object.entries(dr.env_check).map(([k, v]) => (
-                <div key={k} className="flex gap-3 text-sm mb-2">
+                <div key={k} className="flex gap-3 text-sm mb-2 flex-wrap">
                   <code className="text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded text-xs flex-shrink-0">{k}</code>
                   <span className={v.startsWith("✅") ? "text-green-700" : v.startsWith("❌") ? "text-red-600" : "text-amber-600"}>{v}</span>
                 </div>
@@ -378,12 +394,35 @@ function DebugPanel({ loading, result, onRun }: {
             </div>
           )}
 
-          {/* Diagnosis */}
+          {/* Cloudinary Test */}
+          {dr.cloudinary_test && (
+            <div className={`rounded-2xl border p-5 ${
+              dr.cloudinary_test.status.startsWith("✅") ? "bg-green-50 border-green-200" :
+              dr.cloudinary_test.status.startsWith("⚠️") ? "bg-amber-50 border-amber-200" :
+              "bg-red-50 border-red-200"}`}>
+              <h3 className="font-semibold text-sm mb-2">📸 Test Upload Cloudinary</h3>
+              <p className="text-sm font-medium">{dr.cloudinary_test.status}</p>
+              {dr.cloudinary_test.message && <p className="text-sm mt-1 text-green-700">{dr.cloudinary_test.message}</p>}
+              {dr.cloudinary_test.test_url && (
+                <a href={dr.cloudinary_test.test_url} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-blue-600 underline mt-1 block break-all">{dr.cloudinary_test.test_url}</a>
+              )}
+              {dr.cloudinary_test.error && <p className="text-sm mt-1 text-red-700 font-medium">Error: {dr.cloudinary_test.error}</p>}
+              {dr.cloudinary_test.diagnosis && (
+                <div className="mt-2 p-3 bg-white/60 rounded-xl text-sm text-red-800">
+                  💡 <strong>Solusi:</strong> {dr.cloudinary_test.diagnosis}
+                </div>
+              )}
+              {dr.cloudinary_test.reason && <p className="text-sm mt-1 text-amber-700">{dr.cloudinary_test.reason}</p>}
+            </div>
+          )}
+
+          {/* Diagnosis lama (sheets) */}
           {dr.diagnosis && (
             <div className={`rounded-2xl border p-5 ${
               dr.diagnosis.startsWith("✅") ? "bg-green-50 border-green-200" :
               dr.diagnosis.startsWith("❌") ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
-              <h3 className="font-semibold text-sm mb-2">🩺 Diagnosis</h3>
+              <h3 className="font-semibold text-sm mb-2">🩺 Diagnosis Sheets</h3>
               <p className="text-sm font-medium">{dr.diagnosis}</p>
               {dr.solution && <p className="text-sm mt-2 text-neutral-600">💡 {dr.solution}</p>}
               {dr.possible_causes && (
@@ -394,42 +433,43 @@ function DebugPanel({ loading, result, onRun }: {
             </div>
           )}
 
-          {/* GET Test */}
-          {dr.get_test && (
+          {/* Sheets Tests */}
+          {(dr.sheets_get_test || dr.sheets_get_error) && (
             <div className="bg-white rounded-2xl border border-neutral-100 p-5">
-              <h3 className="font-semibold text-sm text-neutral-700 mb-3">🔍 Test GET</h3>
-              <div className="bg-neutral-50 rounded-xl p-3 font-mono text-xs overflow-x-auto">
-                <pre>{JSON.stringify(dr.get_test, null, 2)}</pre>
-              </div>
-              {dr.get_response_raw && (
-                <div className="mt-2 bg-red-50 rounded-xl p-3 text-xs text-red-700">
-                  <p className="font-semibold mb-1">⚠️ Response bukan JSON — Apps Script belum benar:</p>
-                  <pre className="whitespace-pre-wrap break-all">{dr.get_response_raw}</pre>
+              <h3 className="font-semibold text-sm text-neutral-700 mb-3">📊 Test Google Sheets GET</h3>
+              {dr.sheets_get_test && (
+                <div className="bg-neutral-50 rounded-xl p-3 font-mono text-xs overflow-x-auto">
+                  <pre>{JSON.stringify(dr.sheets_get_test, null, 2)}</pre>
                 </div>
               )}
-              {dr.get_test_error && <p className="mt-2 text-sm text-red-600">{dr.get_test_error}</p>}
+              {dr.sheets_get_raw && (
+                <div className="mt-2 bg-red-50 rounded-xl p-3 text-xs text-red-700">
+                  <p className="font-semibold mb-1">⚠️ Response bukan JSON:</p>
+                  <pre className="whitespace-pre-wrap break-all">{dr.sheets_get_raw}</pre>
+                </div>
+              )}
+              {dr.sheets_get_error && <p className="mt-2 text-sm text-red-600">{dr.sheets_get_error}</p>}
             </div>
           )}
-
-          {/* POST Test */}
-          {dr.post_test && (
+          {(dr.sheets_post_test || dr.sheets_post_error) && (
             <div className="bg-white rounded-2xl border border-neutral-100 p-5">
-              <h3 className="font-semibold text-sm text-neutral-700 mb-3">📤 Test POST (kirim data)</h3>
-              <div className="bg-neutral-50 rounded-xl p-3 font-mono text-xs overflow-x-auto">
-                <pre>{JSON.stringify(dr.post_test, null, 2)}</pre>
-              </div>
-              {dr.post_response && (
+              <h3 className="font-semibold text-sm text-neutral-700 mb-3">📤 Test Google Sheets POST</h3>
+              {dr.sheets_post_test && (
+                <div className="bg-neutral-50 rounded-xl p-3 font-mono text-xs overflow-x-auto">
+                  <pre>{JSON.stringify(dr.sheets_post_test, null, 2)}</pre>
+                </div>
+              )}
+              {dr.sheets_post_response && (
                 <div className="mt-2 bg-neutral-50 rounded-xl p-3 font-mono text-xs">
-                  <pre>{JSON.stringify(dr.post_response, null, 2)}</pre>
+                  <pre>{JSON.stringify(dr.sheets_post_response, null, 2)}</pre>
                 </div>
               )}
-              {dr.post_response_raw && (
+              {dr.sheets_post_raw && (
                 <div className="mt-2 bg-red-50 rounded-xl p-3 text-xs text-red-700">
-                  <p className="font-semibold mb-1">⚠️ Response POST bukan JSON:</p>
-                  <pre className="whitespace-pre-wrap break-all">{dr.post_response_raw}</pre>
+                  <pre className="whitespace-pre-wrap break-all">{dr.sheets_post_raw}</pre>
                 </div>
               )}
-              {dr.post_test_error && <p className="mt-2 text-sm text-red-600">{dr.post_test_error}</p>}
+              {dr.sheets_post_error && <p className="mt-2 text-sm text-red-600">{dr.sheets_post_error}</p>}
             </div>
           )}
 
@@ -437,12 +477,10 @@ function DebugPanel({ loading, result, onRun }: {
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
             <h3 className="font-semibold text-sm text-blue-800 mb-3">📖 Panduan Fix Umum</h3>
             <div className="space-y-2 text-sm text-blue-700">
-              <p><strong>1.</strong> Setiap edit kode Apps Script, harus <em>Deploy → New deployment</em> (bukan edit deployment lama)</p>
-              <p><strong>2.</strong> Setting: <em>Execute as: Me</em> dan <em>Who has access: Anyone</em></p>
-              <p><strong>3.</strong> Saat pertama deploy, Google minta Review Permissions — klik <strong>Allow</strong></p>
-              <p><strong>4.</strong> Format URL: <code className="bg-blue-100 px-1 rounded text-xs">https://script.google.com/macros/s/XXXXX/exec</code></p>
-              <p><strong>5.</strong> Setelah update env variable di Vercel, wajib klik <strong>Redeploy</strong></p>
-              <p><strong>6.</strong> Cek log di Apps Script: <em>View → Executions</em></p>
+              <p><strong>Cloudinary:</strong> Pastikan Upload Preset mode = <strong>Unsigned</strong> (bukan Signed)</p>
+              <p><strong>Cloudinary:</strong> Cloud name dan preset name harus persis sama (case-sensitive)</p>
+              <p><strong>Vercel:</strong> Setelah tambah env variable, wajib klik <strong>Redeploy</strong></p>
+              <p><strong>Sheets:</strong> Setiap edit Apps Script → <em>Deploy → New deployment</em></p>
             </div>
           </div>
 
@@ -514,23 +552,29 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     try {
       let imageUrl = formData.imageUrl || "";
 
-      // Upload foto ke Cloudinary jika ada file baru
+      // Upload foto jika ada file baru
       if (file) {
-        const productId = formData.id || Date.now(); // gunakan timestamp sebagai ID sementara jika produk baru
+        const productId = formData.id || Date.now();
         const fd = new FormData();
         fd.append("file", file);
         fd.append("productId", String(productId));
 
+        showToast("Mengupload foto...", "success");
+
         const uploadRes = await fetch("/api/admin/upload", { method: "POST", body: fd });
         const uploadData = await uploadRes.json();
 
+        console.log("Upload response:", uploadData); // untuk debugging
+
         if (uploadData.success && uploadData.url) {
-          imageUrl = uploadData.url; // URL Cloudinary
-        } else if (uploadData.setup_required) {
-          // Cloudinary belum disetup — simpan produk tanpa foto, beri tahu user
-          showToast("Produk disimpan tanpa foto (setup Cloudinary dulu)", "error");
+          imageUrl = uploadData.url;
+          showToast("✅ Foto berhasil diupload!", "success");
         } else {
-          showToast(`Upload foto gagal: ${uploadData.error || "Unknown error"}`, "error");
+          // Tampilkan error detail agar mudah diagnosa
+          const errMsg = uploadData.error || "Upload gagal";
+          const hint = uploadData.hint || uploadData.solution || "";
+          showToast(`❌ ${errMsg}${hint ? ` — ${hint}` : ""}`, "error");
+          // Tetap lanjut simpan produk tanpa foto
         }
       }
 
@@ -544,12 +588,12 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       const resData = await res.json();
       if (!resData.success && res.status !== 200) throw new Error(resData.error);
 
-      showToast(isEdit ? "Produk berhasil diupdate!" : "Produk berhasil ditambahkan!");
+      showToast(isEdit ? "✅ Produk berhasil diupdate!" : "✅ Produk berhasil ditambahkan!");
       setModal(null);
       setEditProduct(null);
       await fetchProducts();
     } catch (err) {
-      showToast(`Gagal menyimpan produk: ${err instanceof Error ? err.message : "Unknown"}`, "error");
+      showToast(`❌ Gagal menyimpan: ${err instanceof Error ? err.message : "Unknown"}`, "error");
     }
   };
 

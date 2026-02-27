@@ -1,162 +1,181 @@
-# 📊 Panduan Setup Google Sheets untuk Testimoni
+# 📊 Panduan Setup Google Sheets (Lengkap v2)
 
-Panduan ini menjelaskan cara menghubungkan form testimoni website ke Google Sheets,
-sehingga kamu bisa melihat dan menyetujui ulasan pelanggan.
+Panduan ini mencakup setup untuk **Testimoni** dan **Manajemen Produk** via Google Sheets.
 
 ---
 
 ## Langkah 1 — Buat Google Spreadsheet
 
-1. Buka [Google Sheets](https://sheets.google.com) dan buat spreadsheet baru
-2. Beri nama: **"Redline Production — Testimoni"**
-3. Buat 2 sheet tab:
-   - Sheet 1: rename jadi `Testimoni`
-   - Sheet 2: rename jadi `Approved`
-
-4. Di sheet **Testimoni**, buat header di baris 1:
-   ```
-   A1: Timestamp
-   B1: Nama
-   C1: Lokasi
-   D1: Paket
-   E1: Rating
-   F1: Ulasan
-   G1: Status (isi: "pending" untuk default)
-   ```
-
-5. Di sheet **Approved**, buat header yang sama persis.
+1. Buka [Google Sheets](https://sheets.google.com) → Buat spreadsheet baru
+2. Beri nama: **"Redline Production — Database"**
+3. Buat 3 sheet tab: `Produk`, `Testimoni`, `Approved`
 
 ---
 
-## Langkah 2 — Buat Google Apps Script
+## Langkah 2 — Setup Header
 
-1. Di spreadsheet, klik menu **Extensions → Apps Script**
-2. Hapus semua kode yang ada, lalu paste kode berikut:
+**Sheet "Produk"** baris 1:
+```
+A:ID | B:Nama | C:Harga | D:Kategori | E:Emoji | F:Popular | G:Order | H:Items (pisah dengan |)
+```
+
+**Sheet "Testimoni"** dan **"Approved"** baris 1:
+```
+A:Timestamp | B:Nama | C:Lokasi | D:Paket | E:Rating | F:Ulasan | G:Status | H:RowIndex
+```
+
+---
+
+## Langkah 3 — Apps Script
+
+Klik **Extensions → Apps Script**, paste kode ini:
 
 ```javascript
-const SHEET_NAME = "Testimoni";
-const APPROVED_SHEET = "Approved";
+const ss = SpreadsheetApp.getActiveSpreadsheet();
 
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
-    
-    if (data.action === "addTestimonial") {
-      const ss = SpreadsheetApp.getActiveSpreadsheet();
-      const sheet = ss.getSheetByName(SHEET_NAME);
-      
-      sheet.appendRow([
-        data.timestamp || new Date().toISOString(),
-        data.name,
-        data.location || "-",
-        data.package || "-",
-        data.rating || 5,
-        data.text,
-        "pending"
-      ]);
-      
-      return ContentService
-        .createTextOutput(JSON.stringify({ success: true }))
-        .setMimeType(ContentService.MimeType.JSON);
+    const action = data.action;
+
+    if (action === "addTestimonial") {
+      const sheet = ss.getSheetByName("Testimoni");
+      const rowIndex = sheet.getLastRow() + 1;
+      sheet.appendRow([data.timestamp||new Date().toISOString(), data.name, data.location||"-", data.package||"-", data.rating||5, data.text, "pending", rowIndex]);
+      return ok({ message: "OK" });
     }
-    
-    return ContentService
-      .createTextOutput(JSON.stringify({ error: "Unknown action" }))
-      .setMimeType(ContentService.MimeType.JSON);
-      
-  } catch(err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ error: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
+
+    if (action === "moderateTestimonial") {
+      const sheet = ss.getSheetByName("Testimoni");
+      const rows = sheet.getDataRange().getValues();
+      const rowIdx = rows.findIndex(r => r[7] == data.rowIndex);
+      if (rowIdx === -1) return err("Not found");
+      if (data.action_type === "approve") {
+        ss.getSheetByName("Approved").appendRow(rows[rowIdx]);
+      }
+      sheet.deleteRow(rowIdx + 1);
+      return ok({});
+    }
+
+    if (action === "addProduct") {
+      const sheet = ss.getSheetByName("Produk");
+      const vals = sheet.getLastRow() > 1 ? sheet.getRange(2,1,sheet.getLastRow()-1,1).getValues().flat().map(Number) : [0];
+      const lastId = Math.max(...vals);
+      sheet.appendRow([lastId+1, data.name, data.price, data.category, data.emoji, data.popular?"TRUE":"FALSE", data.order||99, (data.items||[]).join("|")]);
+      return ok({});
+    }
+
+    if (action === "updateProduct") {
+      const sheet = ss.getSheetByName("Produk");
+      const rows = sheet.getDataRange().getValues();
+      const rowIdx = rows.findIndex(r => r[0] == data.id);
+      if (rowIdx === -1) return err("Not found");
+      const row = rowIdx + 1;
+      sheet.getRange(row, 2).setValue(data.name);
+      sheet.getRange(row, 3).setValue(data.price);
+      sheet.getRange(row, 4).setValue(data.category);
+      sheet.getRange(row, 5).setValue(data.emoji);
+      sheet.getRange(row, 6).setValue(data.popular?"TRUE":"FALSE");
+      sheet.getRange(row, 7).setValue(data.order||rowIdx);
+      sheet.getRange(row, 8).setValue((data.items||[]).join("|"));
+      return ok({});
+    }
+
+    if (action === "deleteProduct") {
+      const sheet = ss.getSheetByName("Produk");
+      const rows = sheet.getDataRange().getValues();
+      const rowIdx = rows.findIndex(r => r[0] == data.id);
+      if (rowIdx !== -1) sheet.deleteRow(rowIdx + 1);
+      return ok({});
+    }
+
+    if (action === "reorder") {
+      const sheet = ss.getSheetByName("Produk");
+      const rows = sheet.getDataRange().getValues();
+      (data.order||[]).forEach(({id, order}) => {
+        const rowIdx = rows.findIndex(r => r[0] == id);
+        if (rowIdx !== -1) sheet.getRange(rowIdx+1, 7).setValue(order);
+      });
+      return ok({});
+    }
+
+    return err("Unknown action");
+  } catch(e) { return err(e.toString()); }
 }
 
 function doGet(e) {
   const action = e.parameter.action;
-  
-  if (action === "getApproved") {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(APPROVED_SHEET);
-    const data = sheet.getDataRange().getValues();
-    
-    // Skip header row
-    const testimonials = data.slice(1).map((row, index) => ({
-      id: index + 100,
-      timestamp: row[0],
-      name: row[1],
-      location: row[2],
-      package: row[3],
-      rating: Number(row[4]),
-      text: row[5],
-    })).filter(t => t.name && t.text);
-    
-    return ContentService
-      .createTextOutput(JSON.stringify({ testimonials }))
-      .setMimeType(ContentService.MimeType.JSON);
+
+  if (action === "getProducts") {
+    const sheet = ss.getSheetByName("Produk");
+    const rows = sheet.getDataRange().getValues().slice(1);
+    const products = rows.filter(r=>r[0]).sort((a,b)=>(a[6]||99)-(b[6]||99)).map(r=>({
+      id:Number(r[0]), name:String(r[1]), price:Number(r[2]),
+      category:String(r[3]), emoji:String(r[4]),
+      popular:String(r[5]).toUpperCase()==="TRUE",
+      order:Number(r[6]),
+      items:String(r[7]).split("|").map(s=>s.trim()).filter(Boolean)
+    }));
+    return ok({ products });
   }
-  
-  return ContentService
-    .createTextOutput(JSON.stringify({ error: "Unknown action" }))
-    .setMimeType(ContentService.MimeType.JSON);
+
+  if (action === "getApproved") {
+    const rows = ss.getSheetByName("Approved").getDataRange().getValues().slice(1);
+    return ok({ testimonials: rows.filter(r=>r[1]).map((r,i)=>({
+      id:i+100, timestamp:r[0], name:r[1], location:r[2], package:r[3], rating:Number(r[4]), text:r[5]
+    }))});
+  }
+
+  if (action === "getAllTestimonials") {
+    const pending = ss.getSheetByName("Testimoni").getDataRange().getValues().slice(1)
+      .filter(r=>r[1]).map((r,i)=>({id:i, timestamp:r[0], name:r[1], location:r[2], package:r[3], rating:Number(r[4]), text:r[5], rowIndex:r[7]}));
+    const approved = ss.getSheetByName("Approved").getDataRange().getValues().slice(1)
+      .filter(r=>r[1]).map((r,i)=>({id:i+1000, timestamp:r[0], name:r[1], location:r[2], package:r[3], rating:Number(r[4]), text:r[5]}));
+    return ok({ pending, approved });
+  }
+
+  return err("Unknown action");
+}
+
+function ok(data) {
+  return ContentService.createTextOutput(JSON.stringify({success:true,...data})).setMimeType(ContentService.MimeType.JSON);
+}
+function err(msg) {
+  return ContentService.createTextOutput(JSON.stringify({success:false,error:msg})).setMimeType(ContentService.MimeType.JSON);
 }
 ```
 
-3. Klik **Save** (Ctrl+S), beri nama project: `RedlineTestimoni`
+---
+
+## Langkah 4 — Deploy Web App
+
+1. **Deploy → New deployment → Web app**
+2. Execute as: **Me** | Who has access: **Anyone**
+3. Klik Deploy → **Copy URL**
 
 ---
 
-## Langkah 3 — Deploy Apps Script sebagai Web App
+## Langkah 5 — Environment Variables di Vercel
 
-1. Klik tombol **Deploy → New deployment**
-2. Klik ikon ⚙️ di sebelah "Select type" → pilih **Web app**
-3. Isi form:
-   - **Description**: Redline Testimoni API
-   - **Execute as**: Me (your email)
-   - **Who has access**: **Anyone** ← PENTING!
-4. Klik **Deploy**
-5. **Copy URL** yang muncul — formatnya seperti:
-   ```
-   https://script.google.com/macros/s/XXXXXXXXXXXX/exec
-   ```
+| Name | Value |
+|------|-------|
+| `GOOGLE_SHEETS_WEBAPP_URL` | URL Apps Script kamu |
+| `ADMIN_PASSWORD` | Password admin (default: `Redline@Admin2026`) |
 
 ---
 
-## Langkah 4 — Tambahkan URL ke Environment Variable Vercel
+## Langkah 6 — Isi Data Produk Awal
 
-1. Buka [vercel.com](https://vercel.com) → project kamu
-2. Klik **Settings → Environment Variables**
-3. Tambahkan:
-   - **Name**: `GOOGLE_SHEETS_WEBAPP_URL`
-   - **Value**: URL Apps Script dari langkah 3
-   - **Environment**: Production, Preview, Development (centang semua)
-4. Klik **Save**
-5. **Redeploy** project agar perubahan diterapkan
+Di sheet **"Produk"**, isi setiap baris. Contoh:
+```
+1 | Paket 1 | 110000 | standard | 🎁 | FALSE | 1 | Gizi|Tic tic|Teh dandang|Marjan squash|Nabati ah|Minyak fitri 200 ml
+```
+Items dipisahkan dengan tanda **|** (pipe).
 
 ---
 
-## Langkah 5 — Cara Verifikasi/Approve Testimoni
+## Akses Admin Panel
 
-Saat ada pelanggan mengirim testimoni:
+Buka: `https://website-kamu.vercel.app/redline-admin`
 
-1. **Buka Google Sheets** → sheet **"Testimoni"**
-2. Kamu akan melihat baris baru dengan status `pending`
-3. **Untuk approve**: Copy baris tersebut ke sheet **"Approved"**
-4. Testimoni akan otomatis muncul di website dalam 5 menit (karena ada cache 5 menit)
-
-> 💡 **Tips**: Kamu bisa buat Google Sheets notification agar dapat email setiap ada testimoni baru. Caranya: **Tools → Notification rules → Any changes → Email - right away**
-
----
-
-## Langkah 6 — Test Integrasi
-
-Setelah semua setup, test dengan cara:
-1. Buka website kamu
-2. Pergi ke halaman Testimoni
-3. Isi dan kirim form testimoni
-4. Cek Google Sheets — harus ada data baru di sheet "Testimoni"
-5. Copy ke sheet "Approved"
-6. Tunggu 5 menit atau refresh website
-
----
-
-Jika ada kendala, hubungi developer atau cek log di Apps Script: **View → Executions**
+Login dengan password di environment variable `ADMIN_PASSWORD`.

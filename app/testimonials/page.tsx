@@ -1,13 +1,38 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { testimonials as staticTestimonials } from "@/lib/data";
 
+interface Testimonial {
+  id: number;
+  name: string;
+  location: string;
+  package: string;
+  rating: number;
+  text: string;
+  date?: string;
+}
+
 export default function TestimonialsPage() {
+  const [testimonials, setTestimonials] = useState<Testimonial[]>(staticTestimonials);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", location: "", packageName: "", text: "", rating: 5 });
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
 
-  const avgRating = (staticTestimonials.reduce((s, t) => s + t.rating, 0) / staticTestimonials.length).toFixed(1);
+  // Fetch gabungan: hardcode + approved dari Sheets
+  useEffect(() => {
+    fetch("/api/testimonials")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.testimonials?.length > 0) {
+          setTestimonials(data.testimonials);
+        }
+      })
+      .catch(() => {/* tetap pakai hardcode */});
+  }, []);
+
+  const avgRating = testimonials.length > 0
+    ? (testimonials.reduce((s, t) => s + t.rating, 0) / testimonials.length).toFixed(1)
+    : "5.0";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,8 +90,8 @@ export default function TestimonialsPage() {
 
         {/* Testimonials Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
-          {staticTestimonials.map((t, i) => (
-            <div key={t.id} className="bg-white rounded-2xl p-6 border border-neutral-100 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
+          {testimonials.map((t, i) => (
+            <div key={`${t.id}-${i}`} className="bg-white rounded-2xl p-6 border border-neutral-100 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex gap-0.5">
                   {Array.from({ length: 5 }).map((_, j) => (

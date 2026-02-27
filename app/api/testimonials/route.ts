@@ -1,25 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Google Sheets Web App URL — isi setelah setup di README
-const SHEET_WEBAPP_URL = process.env.GOOGLE_SHEETS_WEBAPP_URL || "";
+const SHEET_URL = process.env.GOOGLE_SHEETS_WEBAPP_URL || "";
 
+// POST — user kirim testimoni baru
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { name, location, packageName, rating, text } = body;
 
     if (!name || !text) {
-      return NextResponse.json({ error: "Name and text are required" }, { status: 400 });
+      return NextResponse.json({ error: "Nama dan ulasan wajib diisi" }, { status: 400 });
     }
 
-    if (!SHEET_WEBAPP_URL) {
-      // Jika belum setup, simpan saja dan return success (untuk development)
-      console.log("Testimoni diterima (SHEET_WEBAPP_URL belum diset):", body);
-      return NextResponse.json({ success: true, message: "Testimoni diterima" });
+    if (!SHEET_URL) {
+      console.log("Testimoni diterima (SHEET_URL belum diset):", body);
+      return NextResponse.json({ success: true });
     }
 
-    // Kirim ke Google Sheets via Apps Script Web App
-    const response = await fetch(SHEET_WEBAPP_URL, {
+    const res = await fetch(SHEET_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -30,35 +28,76 @@ export async function POST(req: NextRequest) {
         rating: rating || 5,
         text,
         timestamp: new Date().toISOString(),
-        approved: false,
       }),
     });
 
-    if (!response.ok) throw new Error("Failed to submit to Google Sheets");
+    const responseText = await res.text();
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch {
+      throw new Error("Response tidak valid dari Google Sheets");
+    }
+
+    if (!responseData.success) {
+      throw new Error(responseData.error || "Gagal simpan testimoni");
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Testimonial API error:", error);
+    console.error("Testimonial POST error:", error);
     return NextResponse.json({ error: "Gagal mengirim testimoni" }, { status: 500 });
   }
 }
 
+// GET — ambil testimoni yang sudah approved dari Sheets
+// digabung dengan hardcode dari lib/data.ts
 export async function GET() {
   try {
-    if (!SHEET_WEBAPP_URL) {
-      return NextResponse.json({ testimonials: [] });
+    // Selalu sertakan testimoni hardcode sebagai base
+    const { testimonials: staticTestimonials } = await import("@/lib/data");
+
+    if (!SHEET_URL) {
+      return NextResponse.json({ testimonials: staticTestimonials, source: "hardcode" });
     }
 
-    const response = await fetch(`${SHEET_WEBAPP_URL}?action=getApproved`, {
-      next: { revalidate: 300 }, // cache 5 menit
-    });
+    try {
+      const res = await fetch(`${SHEET_URL}?action=getApproved`, {
+        next: { revalidate: 120 }, // cache 2 menit
+      });
 
-    if (!response.ok) throw new Error("Failed to fetch testimonials");
+      if (!res.ok) throw new Error("Sheets tidak bisa diakses");
 
-    const data = await response.json();
-    return NextResponse.json({ testimonials: data.testimonials || [] });
-  } catch (error) {
-    console.error("Testimonial GET error:", error);
-    return NextResponse.json({ testimonials: [] });
+      const data = await res.json();
+      const sheetsTestimonials = (data.testimonials || []) as Array<{
+        id: number;
+        name: string;
+        location: string;
+        package: string;
+        rating: number;
+        text: string;
+        timestamp?: string;
+        date?: string;
+      }>;
+
+      // Gabungkan: hardcode dulu, lalu dari Sheets (yang sudah diapprove)
+      const combined = [
+        ...staticTestimonials,
+        ...sheetsTestimonials.map((t) => ({
+          ...t,
+          date: t.timestamp
+            ? new Date(t.timestamp).toLocaleDateString("id-ID", { year: "numeric", month: "long" })
+            : "Baru",
+        })),
+      ];
+
+      return NextResponse.json({ testimonials: combined, source: "combined" });
+    } catch {
+      // Kalau Sheets gagal, tetap tampilkan data hardcode
+      return NextResponse.json({ testimonials: staticTestimonials, source: "hardcode_fallback" });
+    }
+  } catch (err) {
+    console.error("Testimonials GET error:", err);
+    return NextResponse.json({ testimonials: [], source: "error" });
   }
 }

@@ -39,8 +39,8 @@ export async function GET(req: NextRequest) {
       const uploadFd = new FormData();
       uploadFd.append("file", testBlob, "test.png");
       uploadFd.append("upload_preset", UPLOAD_PRESET);
-      uploadFd.append("public_id", "redline/debug-test");
-      uploadFd.append("overwrite", "true");
+      uploadFd.append("public_id", "debug-test");
+      uploadFd.append("folder", "redline");
 
       const cloudRes = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,

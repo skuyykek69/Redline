@@ -51,8 +51,7 @@ export async function POST(req: NextRequest) {
     const uploadFormData = new FormData();
     uploadFormData.append("file", file);
     uploadFormData.append("upload_preset", UPLOAD_PRESET);
-    uploadFormData.append("public_id", `redline/paket-${productId}`);
-    uploadFormData.append("overwrite", "true");
+    uploadFormData.append("public_id", `paket-${productId}`);
     uploadFormData.append("folder", "redline");
 
     const cloudUrl = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
